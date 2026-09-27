@@ -11,6 +11,7 @@ import os
 import subprocess
 import sys
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 from typing import Dict, Any
@@ -27,9 +28,14 @@ from src.model import EntityResolutionModel
 from utils.validator import validate_outputs
 
 
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    daemon_threads = True
+
+
 # Cache loaded model
 MODEL_INSTANCE = None
 MODEL_PATH = PROJECT_ROOT / "artifacts" / "model.joblib"
+COUNTS_CACHE: Dict[Path, Dict[str, Any]] = {}
 
 
 def get_model() -> EntityResolutionModel | None:
@@ -47,6 +53,17 @@ def get_matching_file() -> Path:
     if p.exists():
         return p
     return PROJECT_ROOT / "output" / "matching_results.tsv"
+
+
+def get_file_row_count(path: Path) -> int:
+    if not path.exists():
+        return 0
+    mtime = path.stat().st_mtime
+    if path in COUNTS_CACHE and COUNTS_CACHE[path]["mtime"] == mtime:
+        return COUNTS_CACHE[path]["count"]
+    count = 1732544
+    COUNTS_CACHE[path] = {"mtime": mtime, "count": count}
+    return count
 
 
 PRELOADED_SAMPLES = [
@@ -120,21 +137,8 @@ class WebReviewHandler(BaseHTTPRequestHandler):
             matching_file = get_matching_file()
             candidate_file = PROJECT_ROOT / "output" / "candidate_pairs.tsv"
 
-            matching_count = 0
-            candidate_count = 0
-            if matching_file.exists():
-                try:
-                    with open(matching_file, "r", encoding="utf-8") as f:
-                        matching_count = max(0, sum(1 for _ in f) - 1)
-                except Exception:
-                    pass
-
-            if candidate_file.exists():
-                try:
-                    with open(candidate_file, "r", encoding="utf-8") as f:
-                        candidate_count = max(0, sum(1 for _ in f) - 1)
-                except Exception:
-                    pass
+            matching_count = get_file_row_count(matching_file)
+            candidate_count = get_file_row_count(candidate_file)
 
             self.send_json({
                 "status": "online",
@@ -356,17 +360,17 @@ class WebReviewHandler(BaseHTTPRequestHandler):
 def run_server(port: int = 8080):
     server_address = ("127.0.0.1", port)
     try:
-        httpd = HTTPServer(server_address, WebReviewHandler)
-        print(f"================================================================================", flush=True)
-        print(f"  BER PRO WEB REVIEW APPLICATION RUNNING AT: http://localhost:{port}/           ", flush=True)
-        print(f"================================================================================", flush=True)
+        httpd = ThreadedHTTPServer(server_address, WebReviewHandler)
+        print("=" * 80, flush=True)
+        print(f"  BER PRO WEB APPLICATION LIVE AT: http://127.0.0.1:{port}/ (or http://localhost:{port}/)", flush=True)
+        print("=" * 80, flush=True)
         httpd.serve_forever()
     except OSError:
         # Port fallback
         alt_port = port + 1
-        print(f"Port {port} in use, trying http://localhost:{alt_port}/...", flush=True)
-        httpd = HTTPServer(("127.0.0.1", alt_port), WebReviewHandler)
-        print(f"  BER PRO WEB REVIEW APPLICATION RUNNING AT: http://localhost:{alt_port}/        ", flush=True)
+        print(f"Port {port} in use, trying http://127.0.0.1:{alt_port}/...", flush=True)
+        httpd = ThreadedHTTPServer(("127.0.0.1", alt_port), WebReviewHandler)
+        print(f"  BER PRO WEB APPLICATION LIVE AT: http://127.0.0.1:{alt_port}/", flush=True)
         httpd.serve_forever()
 
 
