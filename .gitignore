@@ -14,6 +14,7 @@ ENV/
 # Large Dataset Files (> 100MB GitHub limit)
 # Note: Raw dataset TSV files are excluded to respect GitHub's 100MB file limit.
 resources/dataset/
+BER pro/output/*.tsv
 *.tsv.gz
 *.zip
 *.tar.gz
