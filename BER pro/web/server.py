@@ -42,6 +42,13 @@ def get_model() -> EntityResolutionModel | None:
     return MODEL_INSTANCE
 
 
+def get_matching_file() -> Path:
+    p = PROJECT_ROOT / "output" / "matching_result.tsv"
+    if p.exists():
+        return p
+    return PROJECT_ROOT / "output" / "matching_results.tsv"
+
+
 PRELOADED_SAMPLES = [
     {
         "title": "Exact Match with Suffix Differences",
@@ -110,7 +117,7 @@ class WebReviewHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/status":
             model = get_model()
-            matching_file = PROJECT_ROOT / "output" / "matching_results.tsv"
+            matching_file = get_matching_file()
             candidate_file = PROJECT_ROOT / "output" / "candidate_pairs.tsv"
 
             matching_count = 0
@@ -151,7 +158,7 @@ class WebReviewHandler(BaseHTTPRequestHandler):
             limit = int(qs.get("limit", ["50"])[0])
             offset = int(qs.get("offset", ["0"])[0])
 
-            matching_file = PROJECT_ROOT / "output" / "matching_results.tsv"
+            matching_file = get_matching_file()
             candidate_file = PROJECT_ROOT / "output" / "candidate_pairs.tsv"
 
             if not matching_file.exists():
@@ -197,7 +204,7 @@ class WebReviewHandler(BaseHTTPRequestHandler):
             return
 
         elif path == "/api/validate":
-            matching_file = PROJECT_ROOT / "output" / "matching_results.tsv"
+            matching_file = get_matching_file()
             candidate_file = PROJECT_ROOT / "output" / "candidate_pairs.tsv"
             test_dir = PROJECT_ROOT.parent / "resources" / "dataset" / "test"
             s1_file = test_dir / "test_source1.tsv"
