@@ -49,12 +49,6 @@ def main():
         resume=True
     )
 
-    print("\nSynchronizing outputs to resources/output/...")
-    res_output_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(matching_path, res_output_dir / "matching_results.tsv")
-    shutil.copy2(candidate_path, res_output_dir / "candidate_pairs.tsv")
-    print(f"Copied files to {res_output_dir}.")
-
     print("\nPackaging verified submission ZIP archives...")
     import subprocess
     zip_script = WORKSPACE_ROOT / "scripts" / "create_submission_zip.py"
