@@ -1,0 +1,40 @@
+PROPRIETARY AND CONFIDENTIAL SOURCE CODE LICENSE
+=====================================================
+
+Copyright (c) 2026 Repository Owner. All Rights Reserved.
+
+NOTICE CONCERNING REPOSITORY ACCESS AND LICENSING:
+--------------------------------------------------
+This software and associated documentation files (the "Software") comprise proprietary 
+and confidential trade secrets and intellectual property of the repository owner. 
+
+1. ACCESS AND PERMISSIONS:
+   Access to this repository is private and strictly restricted. Access is granted solely 
+   to individuals or entities explicitly invited and authorized by the repository owner. 
+   Permission to access this private repository does NOT grant any license or right to 
+   copy, redistribute, publish, sublicense, transfer, reverse engineer, or commercially 
+   exploit any portion of this Software.
+
+2. RESTRICTIONS ON REDISTRIBUTION:
+   No part of this source code, documentation, machine learning models, weights, or 
+   generated outputs may be reproduced, distributed, shared, publicised, or transmitted 
+   in any form or by any means, electronic or mechanical, including photocopying, recording, 
+   or by any information storage and retrieval system, without prior written permission 
+   from the repository owner.
+
+3. LEGAL NATURE OF THIS LICENSE:
+   This Software is NOT licensed under an open-source license (such as MIT, Apache 2.0, 
+   or GNU General Public License). A private GitHub repository controls technological 
+   access to the source files, whereas this license defines the legal permissions 
+   governing the use of the code. This license does not technically prevent unauthorized 
+   access by parties possessing repository access credentials, but reserves all legal 
+   rights, remedies, and protections under applicable copyright and intellectual 
+   property laws.
+
+4. DISCLAIMER OF WARRANTY:
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
+   INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A 
+   PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT OWNER BE 
+   LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
+   TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR 
+   THE USE OR OTHER DEALINGS IN THE SOFTWARE.

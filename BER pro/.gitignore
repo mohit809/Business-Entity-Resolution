@@ -1,0 +1,89 @@
+# ==============================================================================
+# Business Entity Resolution (BER Pro) — Git Ignore & Security Policy
+# ==============================================================================
+
+# Credentials, Keys, and Secrets (Strict Zero-Exposure Rule)
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.json
+id_rsa*
+id_ed25519*
+
+# Python Bytecode & Optimization Caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing & Quality Assurance Tool Caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Notebooks & IDE Configurations
+.ipynb_checkpoints/
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Operating System Temporary Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Logs & Runtime Diagnostics
+*.log
+logs/
+scratch/
+test_print.*
+report_template.html
+
+# Generated Large Outputs (>100MB GitHub limit protection)
+# Generated evaluation and competition submission TSVs can exceed GitHub's 100MB limit.
+output/*.tsv
+!output/.gitkeep
+
+# External Raw Datasets
+resources/dataset/
+*.tsv.gz
+*.zip
+*.tar.gz

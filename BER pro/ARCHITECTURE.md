@@ -1,196 +1,342 @@
-# Business Entity Resolution — Architecture Blueprint & System Design
+# Business Entity Resolution (BER Pro) — System Architecture
 
-## 1. Executive Architecture Blueprint
-
-```text
-TRAIN
-  train_source1.tsv ─┐
-  train_source2.tsv ─┼─> normalize ─> blocking indexes ─> training candidates
-  train_source3.tsv ─┘                                      │
-  train_ground_truth.tsv ───────────────────────────────────┤
-                                                           ▼
-                                                pair features + labels
-                                                           ▼
-                                                grouped validation
-                                                           ▼
-                                               XGBoost classifier
-                                                           ▼
-                                                F0.5 threshold tuning
-                                                           ▼
-                                                final trained model
-
-TEST
-  test_source1.tsv ─┐
-  test_source2.tsv ─┼─> normalize ─> multi-block candidate generation
-  test_source3.tsv ─┘                         │
-                                             ▼
-                                   candidate_pairs.tsv
-                                             │
-                                             ▼
-                                    feature extraction
-                                             │
-                                             ▼
-                                      ML inference
-                                             │
-                                             ▼
-                                  threshold + dedupe
-                                             │
-                                             ▼
-                                  matching_results.tsv
-```
-
-## 2. Core Architectural Design Principles
-
-1. **No $O(N \times M)$ All-Pairs Comparison**:
-   Exhaustive Cartesian cross-products over millions of business entities are strictly avoided. All candidate selection occurs via constant-time inverted index lookups.
-2. **Decoupled Candidate Generation & Classification**:
-   Candidate selection (recall-maximizing) is architecturally segregated from pairwise matching classification (precision-maximizing).
-3. **Multi-Signal Blocking Diversity**:
-   Multiple independent blocking indexes (exact normalized name, country + rare name token, address token overlap, character n-gram retrieval) protect against noisy single fields.
-4. **Candidate Persistency & Auditability**:
-   The exact candidate set evaluated by the machine learning model is materialized into `candidate_pairs.tsv` immediately before inference.
-5. **Precision Prioritization ($F_{0.5}$ Metric Alignment)**:
-   False positives are penalized twice as heavily as false negatives. Decision boundaries are explicitly calibrated against entity-level Macro $F_{0.5}$.
-6. **Open-Set Country Preservation**:
-   Country attributes are treated as dynamic open-set tokens rather than fixed categorical enums, guaranteeing zero failure on unobserved test countries.
-7. **Singleton Completeness**:
-   Every Source 1 entity is represented in `matching_results.tsv` and `candidate_pairs.tsv`. Unmatched entities are recorded with an empty match field.
+This document provides the definitive architectural specification for the **Business Entity Resolution (BER Pro)** production system, detailing data flow, ML pipelines, candidate blocking, pairwise feature extraction, threshold calibration, backend server design, frontend dashboard architecture, and security governance.
 
 ---
 
-## 3. C4 Architecture Specification
+## 1. System Overview
 
-### Level 1: System Context Diagram
+BER Pro solves the challenge of cross-source enterprise entity resolution across multi-million row business registries. Given query records from **Source 1** and target pools from **Source 2** and **Source 3**, the system identifies whether each Source 1 business entity matches one or more target records, or represents a singleton (unmatched entity).
 
 ```mermaid
 flowchart TD
-    subgraph ChallengeEnvironment ["Challenge Runtime Environment"]
-        User(["Data Scientist / Evaluator"])
-        InputData[("Challenge TSV Datasets\nSource 1, Source 2, Source 3, Ground Truth")]
-        Validator["Submission Validator Script\n(utils/validate_submission.py)"]
+    subgraph InputSources ["External Data Sources"]
+        S1["Source 1 Queries\n(name, address, country)"]
+        S2["Source 2 Targets\n(name, address, country)"]
+        S3["Source 3 Targets\n(name, address, country)"]
     end
 
-    subgraph BERSystem ["Business Entity Resolution System (BER pro)"]
-        BERPipeline["BER Modular Pipeline\n(src/pipeline.py)"]
-        Outputs[("Submission Artifacts\nmatching_results.tsv\ncandidate_pairs.tsv")]
+    subgraph BERCore ["BER Pro Core Pipeline"]
+        Norm["1. Normalization Layer\n(Text cleaning, legal suffix removal, postal code extraction)"]
+        Block["2. Inverted Index Blocker\n(Exact name, postal buckets, address token index)"]
+        Feat["3. Pairwise Featurizer\n(13 string distance, token set, and contextual features)"]
+        Model["4. Calibrated XGBoost Classifier\n(GBDT probability scoring + Macro F0.5 threshold)"]
     end
 
-    User -->|Executes CLI pipeline| BERPipeline
-    InputData -->|Ingested offline| BERPipeline
-    BERPipeline -->|Generates formatted TSVs| Outputs
-    Outputs -->|Evaluated and verified| Validator
-    Validator -->|Returns pass/fail code 0| User
+    subgraph Outputs ["Standardized Outputs"]
+        CandPairs[("candidate_pairs.tsv\n(Audit trail of all generated candidates)")]
+        MatchResults[("matching_results.tsv\n(Final predicted entity matches & singletons)")]
+    end
+
+    S1 --> Norm
+    S2 --> Norm
+    S3 --> Norm
+    Norm --> Block
+    Block --> CandPairs
+    Block --> Feat
+    Feat --> Model
+    Model --> MatchResults
 ```
 
-### Level 2: Container Diagram
+---
+
+## 2. End-to-End Data Flow
+
+The data flow enforces three invariant properties:
+1. **Candidate Persistency**: Every pair scored by the model must originate from `candidate_pairs.tsv`.
+2. **Subset Constraint**: $matching\_results \subseteq candidate\_pairs$.
+3. **Singleton Completeness**: Every Source 1 entity appears exactly once in both output files. Singletons are represented with an empty match field.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant S1 as Source 1 (Queries)
+    participant Targets as Source 2 & 3 (Targets)
+    participant Blocker as Multi-Stage Blocker
+    participant Featurizer as 13-Feature Extractor
+    participant Classifier as XGBoost (Threshold 0.74)
+    participant Output as TSV Formatter
+
+    Note over S1,Targets: Step 1: Preprocessing & Inverted Indexing
+    Targets->>Blocker: Stream 9.97M records & populate hash indices
+    S1->>Blocker: Stream Source 1 records & retrieve candidate sets
+    Blocker->>Output: Materialize candidate_pairs.tsv
+    
+    Note over Blocker,Featurizer: Step 2: Feature Extraction
+    Blocker->>Featurizer: Pass candidate pairs (S1_ID, Target_ID)
+    Featurizer->>Classifier: 13-dimensional dense feature vector
+    
+    Note over Classifier,Output: Step 3: Decision & Serialization
+    Classifier->>Classifier: Predict probability P(match | x)
+    Classifier->>Output: Filter pairs where P >= 0.74
+    Output->>Output: Deduplicate & format matching_results.tsv
+```
+
+---
+
+## 3. Training Pipeline
+
+The training pipeline constructs balanced training sets from ground-truth annotations and hard negatives mined from blocking index collisions.
+
+```mermaid
+flowchart TD
+    TrainS1["train_source1.tsv"] --> PrepTrain["Text Normalization"]
+    TrainS23["train_source2.tsv + train_source3.tsv"] --> PrepTrain
+    GroundTruth["train_ground_truth.tsv"] --> LabelMap["Ground Truth Map\n(True Positive Pairs)"]
+
+    PrepTrain --> FitBlocker["Fit Blocker on Train Targets"]
+    FitBlocker --> GenTrainPairs["Generate Candidate Pairs"]
+    GenTrainPairs & LabelMap --> MineNegatives["Hard-Negative Mining\n(Index collisions without label)"]
+
+    MineNegatives --> PairDataset["Pair Dataset\n(Positives + Hard Negatives)"]
+    PairDataset --> FeatExtract["Extract 13 Pairwise Features"]
+    FeatExtract --> GBDT["Train XGBoost GBDT\n(n_estimators=300, max_depth=6)"]
+    GBDT --> Calib["Calibrate Probabilities\n(Platt / Sigmoid Scaling)"]
+    Calib --> ModelArtifact["Save artifacts/model.joblib"]
+```
+
+---
+
+## 4. Validation Pipeline
+
+To eliminate data leakage, validation splits are grouped strictly on `source1_id` using `GroupKFold`. All candidate pairs associated with a given Source 1 entity are held out together.
 
 ```mermaid
 flowchart LR
-    subgraph Storage ["Storage Layer"]
-        RawFiles[("TSV Data Files\nTrain & Test")]
-        ModelStore[("Model Artifacts\nmodel.joblib")]
-        FinalOutput[("Output TSVs\nmatching_results.tsv\ncandidate_pairs.tsv")]
-    end
-
-    subgraph BERContainer ["BER Pipeline Engine"]
-        IngestMod["Ingestion & Preprocessing\n(src/normalization.py)"]
-        BlockerMod["Multi-Stage Blocker\n(src/blocking.py)"]
-        FeatureMod["Pairwise Featurizer\n(src/features.py)"]
-        TrainMod["Training & Threshold Calibrator\n(src/training.py, src/threshold.py)"]
-        InferMod["Inference Engine\n(src/inference.py)"]
-        ValidateMod["Compliance Checker\n(utils/validator.py)"]
-    end
-
-    RawFiles --> IngestMod
-    IngestMod --> BlockerMod
-    BlockerMod --> FeatureMod
-    FeatureMod --> TrainMod
-    TrainMod --> ModelStore
-    ModelStore --> InferMod
-    BlockerMod --> InferMod
-    FeatureMod --> InferMod
-    InferMod --> FinalOutput
-    FinalOutput --> ValidateMod
+    Pairs["All Training Pairs"] --> GroupSplit["GroupKFold (n_splits=5)\nGrouped on source1_id"]
+    GroupSplit --> TrainFold["Train Fold (80%)"]
+    GroupSplit --> ValFold["Validation Fold (20%)"]
+    TrainFold --> TrainModel["Fit XGBoost"]
+    TrainModel --> ValScore["Predict Val Probabilities"]
+    ValFold --> ValScore
+    ValScore --> GridSearch["Sweep Thresholds: [0.00 - 1.00]\nStep: 0.01"]
+    GridSearch --> MaxF05["Optimize Entity-Level Macro F0.5"]
+    MaxF05 --> CalibThreshold["Optimal Threshold: 0.7400"]
 ```
 
-### Level 3: Component Diagram (Candidate Generation & ML Scoring)
+---
+
+## 5. Test Pipeline
+
+The test pipeline is fully decoupled from training and operates strictly on unlabelled test data:
 
 ```mermaid
 flowchart TD
-    subgraph Ingestion ["Record Preprocessing"]
-        S1["Source 1 Records"]
-        Targets["Source 2 + 3 Target Records"]
-        Norm["Text Normalization Layer\n(Suffix Stripping, Address Standardization, Open-Set Country)"]
-        S1 --> Norm
-        Targets --> Norm
-    end
-
-    subgraph BlockingEngine ["Multi-Stage Blocker"]
-        Norm --> BlockA["Block A: Exact Normalized Name"]
-        Norm --> BlockB["Block B: Country + Discriminative Name Token"]
-        Norm --> BlockC["Block C: Informative Address Token Overlap"]
-        Norm --> BlockD["Block D: Character n-gram TF-IDF Retrieval"]
-        BlockA --> Union["Candidate Union & Deduplication"]
-        BlockB --> Union
-        BlockC --> Union
-        BlockD --> Union
-        Union --> Pruning["Compactness Pruner (Composite Lexical Score)"]
-    end
-
-    subgraph FeatureEngineering ["Pairwise Feature Extraction"]
-        Pruning --> Pairs["Candidate Pairs Table"]
-        Pairs --> NameFeats["Name Features (Ratio, WRatio, Jaccard, Containment, Length Diff)"]
-        Pairs --> AddrFeats["Address Features (Ratio, Jaccard, Containment, Overlap, Zip)"]
-        Pairs --> CtxFeats["Context Features (Country Exact Match)"]
-        NameFeats --> FeatMatrix["13-Dimensional Feature Matrix"]
-        AddrFeats --> FeatMatrix
-        CtxFeats --> FeatMatrix
-    end
-
-    subgraph DecisionEngine ["Classification & Decision Layer"]
-        FeatMatrix --> XGB["XGBoost Binary Classifier (350 Trees, Depth 5)"]
-        XGB --> Probabilities["Pair Match Probabilities [0.0 - 1.0]"]
-        Probabilities --> Calib["Calibrated Macro F0.5 Threshold Gate"]
-        Calib --> Dedupe["Deduplication & Format Enforcement"]
-        Dedupe --> Results["matching_results.tsv ⊆ candidate_pairs.tsv"]
-    end
+    TestS2["test_source2.tsv"] --> StreamTargets["Stream Ingestion & Indexing"]
+    TestS3["test_source3.tsv"] --> StreamTargets
+    StreamTargets --> InvertedIndices["Inverted Indices in Memory\n(5.66M Names, 60.5K Postal Codes)"]
+    
+    TestS1["test_source1.tsv\n(1.73M records)"] --> StreamQueries["Stream Query Generator"]
+    StreamQueries & InvertedIndices --> BlockLookup["Candidate Retrieval\n(Cap: max 15 per entity)"]
+    
+    BlockLookup --> WriteCand["Stream write candidate_pairs.tsv"]
+    BlockLookup --> FeatGen["Vectorized Feature Extraction"]
+    FeatGen --> ModelInfer["XGBoost Batch Inference (Chunk 10,000)"]
+    ModelInfer --> ThreshFilter["Apply Decision Gate (P >= 0.74)"]
+    ThreshFilter --> WriteMatch["Stream write matching_results.tsv"]
 ```
 
 ---
 
-## 4. Algorithmic Complexity & Scalability Analysis
+## 6. Inference Pipeline
 
-| Processing Stage | Naive Approach | BER Pro Implementation | Improvement Factor |
-| :--- | :--- | :--- | :--- |
-| **Candidate Generation** | Exhaustive Cartesian: $O(N \times M)$ | Inverted Hash Indexing: $O(N + M)$ | $> 100,000\times$ speedup |
-| **Address Overlap Search** | Full-text substring search | Token inverted index with frequency stop-capping | $O(\text{tokens})$ bounded lookup |
-| **Memory Consumption** | Monolithic multi-gigabyte pandas merge | Generator streams + chunked tabular scoring (50k rows) | Stable constant RAM ($< 2 \text{ GB}$) |
-| **Decision Formulation** | Fixed arbitrary threshold (0.50) | Grid-calibrated Entity-Level Macro $F_{0.5}$ search | Optimal alignment with target metric |
+The inference pipeline supports both batch streaming (via `src/scale_inference.py`) and single-pair real-time scoring (via `web/server.py`):
+
+```mermaid
+flowchart LR
+    subgraph Inputs
+        A["Entity A (Query)"]
+        B["Entity B (Candidate)"]
+    end
+
+    subgraph Extraction ["Feature Extraction (13 Features)"]
+        F1["Name Fuzzy Distances\n(Ratio, Indel, TokenSort, TokenSet, JaroWinkler, Partial)"]
+        F2["Name Length Metrics\n(Length Difference, Ratio, Prefix Match)"]
+        F3["Address & Geo\n(Token Overlap Jaccard, Numeric Token Overlap, Postal Match)"]
+        F4["Country\n(Exact ISO Match Indicator)"]
+    end
+
+    subgraph Inference ["Model Execution"]
+        XGB["XGBClassifier.predict_proba()"]
+        Gate{"P(match) >= 0.74?"}
+    end
+
+    subgraph Decision ["Output Formulation"]
+        Match["Match Confirmed (Confidence = P)"]
+        NoMatch["No Match (Fallback / Singleton)"]
+    end
+
+    Inputs --> F1 & F2 & F3 & F4
+    F1 & F2 & F3 & F4 --> XGB
+    XGB --> Gate
+    Gate -- Yes --> Match
+    Gate -- No --> NoMatch
+```
 
 ---
 
-## 5. Architecture Decision Records (ADRs)
+## 7. Candidate-Generation Architecture (Multi-Stage Blocking)
 
-### ADR-01: Multi-Stage Inverted Index Blocking vs. All-Pairs Cross Joins
-- **Status**: Accepted
-- **Context**: The dataset comprises $>2.2\text{M}$ Source 1 train records and $>1.7\text{M}$ test records, mapped against Source 2 and 3 targets. A Cartesian join would yield $>7 \times 10^{12}$ pairs, consuming hundreds of gigabytes and failing execution limits.
-- **Decision**: Implement four complementary inverted index blocking passes (Exact Name, Country+Token, Address Token Overlap, Character n-gram retrieval) with hard caps per block and composite lexical compactness pruning.
-- **Consequences**: Bounded candidate sets ($\le 30$ candidates per entity), $O(1)$ hash retrieval, guaranteed auditability.
+Naive Cartesian all-pairs comparison would require:
+$$\text{Pairs} = 1{,}732{,}544 \times (4{,}887{,}273 + 5{,}082{,}316) \approx 1.72 \times 10^{13} \text{ pairs}$$
+Evaluating $1.72 \times 10^{13}$ pairs is computationally infeasible. BER Pro utilizes three complementary hash-indexed blocking stages with $O(1)$ lookup:
 
-### ADR-02: Tabular Gradient Boosting (XGBoost) vs. Deep Transformers
-- **Status**: Accepted
-- **Context**: Challenge rules impose an 8-billion parameter ceiling, strict offline execution with no external API connectivity, and fast inference throughput.
-- **Decision**: Utilize an optimized XGBoost binary classifier trained on 13 pairwise similarity features.
-- **Consequences**: Apache-2.0 licensed, $< 50\text{ MB}$ disk footprint, zero GPU requirements, sub-millisecond scoring per record pair.
+1. **Stage 1 (Exact Normalized Legal Name Index)**:
+   Maps cleaned, lowercased, legal-suffix-stripped entity names directly to target entity IDs.
+2. **Stage 2 (Postal Code Bucket Index)**:
+   Extracts digit sequences from addresses and indexes targets within the same postal code.
+3. **Stage 3 (Address Token Overlap Index)**:
+   Inverts address tokens (filtering high-frequency words) to match entities with matching street names or suite numbers.
+4. **Candidate Pruning**:
+   Candidates per entity are unioned and capped at `max_candidates=15` to ensure linear $O(N)$ execution time.
 
-### ADR-03: Entity-Level Macro $F_{0.5}$ Threshold Calibration
-- **Status**: Accepted
-- **Context**: Challenge scoring utilizes Macro $F_{0.5}$, penalizing precision errors twice as severely as recall errors, while treating correct singleton predictions ($TP=FP=FN=0$) as $1.0$.
-- **Decision**: Perform a leak-free `GroupShuffleSplit` on Source 1 entities and execute a fine-grained grid search across thresholds [0.20, 0.95] explicitly scoring entity-level $F_{0.5}$.
-- **Consequences**: Calibrated decision threshold directly maximizes the competition metric while ensuring robust singleton identification.
+---
 
-### ADR-04: Strict Output Format Decoupling and Format Assertion
-- **Status**: Accepted
-- **Context**: `utils/validate_submission.py` enforces rigid structural criteria: UTF-8 encoding, tab delimiters, exact single-row representations per Source 1 entity, and comma-separated IDs inside lists.
-- **Decision**: Implement a native internal validator (`utils/validator.py`) executing identical checks to `validate_submission.py` directly at pipeline completion.
-- **Consequences**: Eliminates submission rejection risk, enforces $matching\_results \subseteq candidate\_pairs$, and guarantees zero self-matches.
+## 8. Feature-Engineering Architecture (13 Dimensions)
+
+Every candidate pair $(S_1, S_2)$ is converted into a 13-dimensional numerical vector:
+
+| # | Feature Name | Description | Algorithm |
+| :---: | :--- | :--- | :--- |
+| 1 | `name_ratio` | Normalized Levenshtein similarity on raw names | RapidFuzz `fuzz.ratio` |
+| 2 | `clean_name_ratio` | Normalized Levenshtein similarity on cleaned names | RapidFuzz `fuzz.ratio` |
+| 3 | `name_token_sort` | Token-sort ratio (word order independent) | RapidFuzz `fuzz.token_sort_ratio` |
+| 4 | `name_token_set` | Token-set ratio (handles duplicate/extra tokens) | RapidFuzz `fuzz.token_set_ratio` |
+| 5 | `name_jaro_winkler`| Prefix-biased character distance | RapidFuzz `distance.JaroWinkler` |
+| 6 | `name_partial_ratio`| Best matching substring similarity | RapidFuzz `fuzz.partial_ratio` |
+| 7 | `name_len_diff` | Absolute difference in name string lengths | $\|len(A) - len(B)\|$ |
+| 8 | `name_len_ratio` | Ratio of shorter name to longer name | $\min(L_1, L_2) / \max(L_1, L_2)$ |
+| 9 | `name_prefix_match`| Binary flag: exact match on first 4 characters | $A[:4] == B[:4]$ |
+| 10| `addr_token_overlap`| Jaccard similarity of address word tokens | $\|T_A \cap T_B\| / \|T_A \cup T_B\|$ |
+| 11| `addr_num_overlap` | Jaccard similarity of numeric address tokens | $\|N_A \cap N_B\| / \|N_A \cup N_B\|$ |
+| 12| `postal_match` | Equality indicator of extracted postal codes | $P_A == P_B$ |
+| 13| `country_match` | Equality indicator of ISO country codes | $C_A == C_B$ |
+
+---
+
+## 9. Machine Learning Architecture
+
+The classification core uses **XGBoost (3.4.1)**:
+* **Algorithm**: Gradient Boosted Decision Trees (`XGBClassifier`)
+* **Objective**: `binary:logistic`
+* **Tree Parameters**: `n_estimators=300`, `max_depth=6`, `learning_rate=0.05`, `subsample=0.8`, `colsample_bytree=0.8`
+* **Calibration**: Platt scaling (logistic sigmoid mapping over tree margins)
+* **Decision Optimization**: Threshold search maximizing entity-level Macro $F_{0.5}$:
+  $$F_{0.5} = \frac{(1 + 0.5^2) \times \text{Precision} \times \text{Recall}}{0.5^2 \times \text{Precision} + \text{Recall}} = \frac{1.25 \times \text{Precision} \times \text{Recall}}{0.25 \times \text{Precision} + \text{Recall}}$$
+  Since precision is weighted twice as heavily as recall, the optimal threshold shifts from default 0.50 up to **0.7400**, suppressing false positives.
+
+---
+
+## 10. Web Dashboard Architecture
+
+The review dashboard is designed with a lightweight, multi-threaded native Python backend and a zero-dependency frontend single-page application:
+
+```mermaid
+flowchart TD
+    subgraph Client ["Browser Client (index.html)"]
+        UI["Tailwind CSS + HTML5 Interface"]
+        Gauges["SVG Dynamic Circular Gauges"]
+        Theme["Dark / Light Mode Controller"]
+        Simulator["Client-Side Similarity Calculator"]
+    end
+
+    subgraph Server ["Backend Server (web/server.py)"]
+        HTTP["http.server.ThreadingHTTPServer (Port 8080)"]
+        Router["Request Router & Static File Handler"]
+        APIHealth["/api/health Handler"]
+        APIScenarios["/api/scenarios Handler"]
+        APIResolve["/api/resolve Handler"]
+    end
+
+    subgraph ModelLayer ["ML Inference Core"]
+        Pipeline["BER Model Wrapper"]
+        JoblibModel["model.joblib"]
+    end
+
+    UI -->|HTTP Requests| HTTP
+    HTTP --> Router
+    Router -->|GET /api/health| APIHealth
+    Router -->|GET /api/scenarios| APIScenarios
+    Router -->|POST /api/resolve| APIResolve
+    APIResolve --> Pipeline
+    Pipeline --> JoblibModel
+    Router -->|Serve Static HTML/CSS/JS| Client
+```
+
+---
+
+## 11. Security Architecture
+
+1. **Zero-Trust Input Sanitization**:
+   All entity strings are stripped, sanitized, and normalized before feature computation.
+2. **Zero-Secrets Policy**:
+   No credentials, tokens, SSH keys, passwords, or connection strings are stored in code or repository tracking.
+3. **Network Isolation**:
+   The entire pipeline and web server run completely offline on `localhost` without outbound cloud API dependencies.
+4. **File Size Enforcement**:
+   Generated multi-gigabyte TSVs are strictly excluded via `.gitignore` to prevent repository bloat and GitHub push failure.
+
+---
+
+## 12. Repository Architecture
+
+```text
+BER pro/
+├── ARCHITECTURE.md                             # Comprehensive architectural specifications
+├── BER_Model_Accuracy_and_Web_UI_Summary.pdf  # 4-page executive summary PDF report
+├── DOCUMENTATION.md                            # Complete engineering documentation
+├── LICENSE                                     # Proprietary All-Rights-Reserved license
+├── README.md                                   # Root project overview and operational guide
+├── TECHNOLOGY_STACK.md                         # Complete technology inventory and audit
+├── .gitignore                                  # Security-hardened exclusions
+├── pyproject.toml                              # PEP 517 build configuration
+├── requirements.txt                            # Production package dependencies
+│
+├── artifacts/
+│   └── model.joblib                            # Serialized trained XGBoost booster (429 KB)
+│
+├── config/
+│   ├── __init__.py
+│   └── settings.py                             # Centralized pipeline configuration dataclasses
+│
+├── output/
+│   └── .gitkeep                                # Tracked output folder (TSVs excluded by .gitignore)
+│
+├── scripts/
+│   ├── evaluate_model.py                       # Standalone rigorous evaluation script
+│   ├── preview_demo.py                         # Console benchmark scenarios runner
+│   ├── run_pipeline.bat                        # Windows Batch end-to-end pipeline launcher
+│   ├── run_pipeline.ps1                        # PowerShell end-to-end pipeline launcher
+│   ├── start_webapp.bat                        # Windows Batch web server launcher
+│   └── start_webapp.ps1                        # PowerShell web server launcher
+│
+├── src/
+│   ├── __init__.py
+│   ├── blocking.py                             # Multi-stage inverted index candidate generator
+│   ├── features.py                             # 13 pairwise string and contextual similarity features
+│   ├── inference.py                            # Pair scoring and threshold gating
+│   ├── metrics.py                              # Official entity-level Macro F0.5 implementation
+│   ├── model.py                                # XGBoost classifier wrapper and persistence
+│   ├── normalization.py                        # Text cleaning, legal suffixes, postal extraction
+│   ├── pipeline.py                             # Standard batch pipeline coordinator
+│   ├── scale_inference.py                      # Memory-constant streaming generator for 9.97M rows
+│   ├── threshold.py                            # Grid search threshold optimization
+│   └── training.py                             # Grouped validation and model training
+│
+├── tests/
+│   ├── __init__.py
+│   ├── test_blocking.py                        # Unit tests for candidate blocking
+│   ├── test_compliance.py                      # Submission format compliance integration test
+│   ├── test_features.py                        # Unit tests for 13 pairwise features
+│   ├── test_metrics.py                         # Unit tests for Macro F0.5 and singleton rules
+│   └── test_normalization.py                  # Unit tests for text cleaning and regex
+│
+├── utils/
+│   ├── __init__.py
+│   └── validator.py                            # Submission TSV schema and constraint validator
+│
+└── web/
+    ├── server.py                               # Multi-threaded HTTP server with REST JSON API
+    └── static/
+        └── index.html                          # Responsive SPA review dashboard
+```

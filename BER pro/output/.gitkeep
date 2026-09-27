@@ -1,0 +1,3 @@
+# Placeholder to keep the output directory tracked in git.
+# Large TSV files generated during inference (candidate_pairs.tsv, matching_results.tsv)
+# are automatically excluded by .gitignore to comply with GitHub file size constraints.
