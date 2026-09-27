@@ -1,0 +1,27 @@
+{
+  "precision": 0.999235,
+  "recall": 0.992478,
+  "accuracy": 0.996564,
+  "f05_score": 0.997877,
+  "roc_auc": 0.999954,
+  "optimal_threshold": 0.88,
+  "true_positives": 27444,
+  "false_positives": 21,
+  "true_negatives": 38978,
+  "false_negatives": 208,
+  "feature_importances": {
+    "country_exact": 0.0,
+    "name_ratio": 0.0584,
+    "name_wratio": 0.0083,
+    "name_jaccard": 0.0162,
+    "name_containment": 0.0002,
+    "name_len_diff": 0.0016,
+    "name_token_overlap": 0.0103,
+    "addr_ratio": 0.0044,
+    "addr_jaccard": 0.0719,
+    "addr_containment": 0.0,
+    "addr_len_diff": 0.0012,
+    "addr_token_overlap": 0.8274,
+    "same_postal_like": 0.0
+  }
+}

@@ -11,10 +11,13 @@ venv/
 env/
 ENV/
 
-# Large Dataset Files (> 100MB GitHub limit)
-# Note: Raw dataset TSV files are excluded to respect GitHub's 100MB file limit.
+# Large Dataset & Output Files (> 100MB GitHub limit)
 resources/dataset/
-BER pro/output/*.tsv
+resources/output/
+BER pro/output/
+matching_result.tsv
+test_out/
+*.tsv
 *.tsv.gz
 *.zip
 *.tar.gz
