@@ -676,7 +676,7 @@
       document.getElementById('rec_b_name').value = sample.rec_b.name;
       document.getElementById('rec_b_addr').value = sample.rec_b.address;
       document.getElementById('rec_b_country').value = sample.rec_b.country;
-      runMatchTest();
+      document.getElementById('match-output').classList.add('hidden');
     }
 
     function clearMatchForm() {
