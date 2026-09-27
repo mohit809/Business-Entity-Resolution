@@ -1,0 +1,100 @@
+================================================================================
+BUSINESS ENTITY RESOLUTION (BER) — INDEPENDENT DATA-BASED EVALUATION REPORT
+================================================================================
+Generated: 2026-09-27 09:44:10
+Execution Duration: 240.85 seconds
+
+1. EXECUTIVE SUMMARY & VERDICT ON REPORTED PERFORMANCE
+--------------------------------------------------------------------------------
+The project previously reported:
+  * Macro F0.5 = 0.983738 (98.37%)
+  * Calibrated Decision Threshold = 0.74
+  * Peak Precision = 98.84%
+  * Singleton Accuracy = 100%
+
+VERDICT:
+The reported score of 0.983738 is (3) ONLY VALIDATION PERFORMANCE ON A SAMPLED
+VALIDATION SUBSET WHERE GROUND TRUTH WAS ARTIFICIALLY INJECTED INTO CANDIDATE PAIRS.
+
+When evaluated on actual unseen data without force-injecting ground-truth positives:
+  * Actual End-to-End Macro F0.5: 96.85%
+  * Blocking Recall: 96.25%
+  * Pairwise Precision: 98.79%
+  * Pairwise Recall: 95.81%
+  * Singleton Accuracy: 96.00%
+  * Exact Match Set Accuracy: 88.00%
+  * Empirically Optimal Threshold: 0.90 (vs reported 0.74)
+
+2. DATASET STATISTICS
+--------------------------------------------------------------------------------
+Global Dataset Counts:
+  * Train Source 1:               2,206,821 entities
+  * Train Source 2:               5,034,616 records
+  * Train Source 3:               5,285,603 records
+  * Train Ground Truth Matches:   7,638,365 positive relationships
+  * Train Singletons:             123,247 (5.58%)
+  * Test Source 1:                1,732,544 entities
+  * Test Source 2:                4,887,273 records
+  * Test Source 3:                5,082,316 records
+
+Evaluation Benchmark Slice:
+  * Source 1 Evaluated:           500 entities
+  * Target Records Pool:          3,360 records
+  * True Positive Relationships:  1,360
+
+3. CANDIDATE GENERATION & BLOCKING PERFORMANCE
+--------------------------------------------------------------------------------
+  * Total Candidate Pairs:        9,071
+  * Average Candidates / S1:      18.14
+  * Median Candidates / S1:       18.0
+  * Maximum Candidates / S1:      30
+  * Candidate Reduction Ratio:    99.4601%
+  * Blocking Recall:              96.25%
+  * True Matches Retained:        1,309
+  * True Matches Missed:          51
+
+4. PAIRWISE ML MODEL METRICS (Threshold = 0.74)
+--------------------------------------------------------------------------------
+  * True Positives (TP):          1,303
+  * False Positives (FP):         16
+  * False Negatives (FN Total):   57 (Threshold: 6 + Blocking Miss: 51)
+  * True Negatives (TN Cand):     7,746
+  * Precision:                    98.79%
+  * Recall:                       95.81%
+  * F1 Score:                     97.28%
+  * F0.5 Score:                   98.18%
+  * F2 Score:                     96.39%
+  * Candidate Pair Accuracy:      99.20%
+
+5. OFFICIAL ENTITY-LEVEL EVALUATION
+--------------------------------------------------------------------------------
+  * Official Macro F0.5:          96.85%
+  * Exact Match-Set Accuracy:     88.00%
+  * Singleton Accuracy:           96.00%
+  * Non-Singleton Macro F0.5:     97.13%
+  * Perfectly Resolved Entities:  440 (88.0%)
+  * Partially Resolved Entities:  50 (10.0%)
+  * Completely Incorrect:         0
+  * Missed Match Entities:        5
+  * False Match Entities:         5
+
+6. THRESHOLD SENSITIVITY & CALIBRATION
+--------------------------------------------------------------------------------
+  * Reported Threshold:           0.74 (Macro F0.5 = 0.9685)
+  * Empirically Optimal:          0.90 (Macro F0.5 = 0.9760)
+  * True-Match Probability Range: [0.2653, 0.9999]
+  * False-Match Probability Range:[0.0000, 0.9899]
+  * Overlap Window:               0.7246
+
+7. REPORTED VS ACTUAL COMPARISON TABLE
+--------------------------------------------------------------------------------
+            metric     reported   actual difference                  verified
+        Macro F0.5     98.3738% 96.8456%   -1.5282% Validation-Only Benchmark
+         Precision       98.84%   98.79%     -0.05%               Close Match
+            Recall Not reported   95.81%          —          Newly Calculated
+          F1 Score Not reported   97.28%          —          Newly Calculated
+Singleton Accuracy         100%   96.00%     -4.00%                   Partial
+Decision Threshold         0.74     0.90      +0.16 Calibrated on Train Split
+   Blocking Recall Not reported   96.25%          —          Newly Calculated
+
+================================================================================

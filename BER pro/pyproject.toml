@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ber-pro"
+version = "1.0.0"
+description = "Scalable Business Entity Resolution Pipeline with Multi-Stage Blocking and Calibrated XGBoost"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "pandas>=2.2.0",
+    "numpy>=1.24.0",
+    "scikit-learn>=1.5.0",
+    "scipy>=1.14.0",
+    "rapidfuzz>=3.10.0",
+    "xgboost>=2.1.0",
+    "joblib>=1.4.0",
+]
+
+[project.scripts]
+ber-pipeline = "src.pipeline:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*", "config*", "utils*"]

@@ -1,0 +1,107 @@
+{
+  "evaluation_timestamp": "2026-09-27 09:44:10",
+  "dataset_statistics": {
+    "global_train_s1": 2206821,
+    "global_train_s2": 5034616,
+    "global_train_s3": 5285603,
+    "global_train_ground_truth_matches": 7638365,
+    "global_train_singletons": 123247,
+    "global_test_s1": 1732544,
+    "global_test_s2": 4887273,
+    "global_test_s3": 5082316,
+    "evaluated_s1_entities": 500,
+    "evaluated_target_records": 3360,
+    "evaluated_true_positives": 1360
+  },
+  "blocking_performance": {
+    "total_candidate_pairs": 9071,
+    "avg_candidates_per_s1": 18.14,
+    "median_candidates_per_s1": 18.0,
+    "max_candidates_per_s1": 30,
+    "candidate_reduction_ratio": 0.994601,
+    "blocking_recall": 0.9625,
+    "blocking_retained_pct": 96.25,
+    "true_matches_retained": 1309,
+    "true_matches_missed": 51
+  },
+  "pairwise_model_performance": {
+    "reported_threshold": 0.74,
+    "optimal_threshold": 0.9,
+    "tp": 1303,
+    "fp": 16,
+    "fn": 57,
+    "tn": 7746,
+    "precision": 0.98787,
+    "recall": 0.958088,
+    "f1": 0.972751,
+    "f05": 0.981766,
+    "f2": 0.9639,
+    "candidate_level_accuracy": 0.991997
+  },
+  "entity_level_performance": {
+    "official_macro_f05": 0.968456,
+    "macro_precision": 0.974881,
+    "macro_recall": 0.95404,
+    "exact_match_accuracy": 0.88,
+    "singleton_accuracy": 0.96,
+    "non_singleton_macro_f05": 0.971275,
+    "perfectly_resolved_count": 440,
+    "partially_resolved_count": 50,
+    "completely_incorrect_count": 0,
+    "missed_match_entities_count": 5,
+    "false_match_entities_count": 5,
+    "correct_singletons_count": 120,
+    "incorrect_non_singletons_as_singletons_count": 5
+  },
+  "comparison_table": [
+    {
+      "metric": "Macro F0.5",
+      "reported": "98.3738%",
+      "actual": "96.8456%",
+      "difference": "-1.5282%",
+      "verified": "Validation-Only Benchmark"
+    },
+    {
+      "metric": "Precision",
+      "reported": "98.84%",
+      "actual": "98.79%",
+      "difference": "-0.05%",
+      "verified": "Close Match"
+    },
+    {
+      "metric": "Recall",
+      "reported": "Not reported",
+      "actual": "95.81%",
+      "difference": "\u2014",
+      "verified": "Newly Calculated"
+    },
+    {
+      "metric": "F1 Score",
+      "reported": "Not reported",
+      "actual": "97.28%",
+      "difference": "\u2014",
+      "verified": "Newly Calculated"
+    },
+    {
+      "metric": "Singleton Accuracy",
+      "reported": "100%",
+      "actual": "96.00%",
+      "difference": "-4.00%",
+      "verified": "Partial"
+    },
+    {
+      "metric": "Decision Threshold",
+      "reported": "0.74",
+      "actual": "0.90",
+      "difference": "+0.16",
+      "verified": "Calibrated on Train Split"
+    },
+    {
+      "metric": "Blocking Recall",
+      "reported": "Not reported",
+      "actual": "96.25%",
+      "difference": "\u2014",
+      "verified": "Newly Calculated"
+    }
+  ]
+}

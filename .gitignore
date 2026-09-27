@@ -1,0 +1,34 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Large Dataset Files (> 100MB GitHub limit)
+# Note: Raw dataset TSV files are excluded to respect GitHub's 100MB file limit.
+resources/dataset/
+*.tsv.gz
+*.zip
+*.tar.gz
+
+# Local IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs & Temporary task outputs
+*.log
+scratch/
+test_print.*
+report_template.html
